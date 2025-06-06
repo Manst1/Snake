@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Snake</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.4.2/p5.min.js"></script>
+  <style>
+    body { display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; background: #f0f0f0; }
+    canvas { border: 2px solid black; }
+  </style>
+</head>
+<body>
+<script>
+let snake;
+let food;
+let gridSize = 20;
+let tileSize = 20;
+let gameOver = false;
+let score = 0;
+let started = false;
+let nextDirection = null;
+
+function setup() {
+  createCanvas(400, 400);
+  frameRate(8);
+  resetGame();
+}
+
+function resetGame() {
+  snake = new Snake();
+  food = createFood();
+  gameOver = false;
+  score = 0;
+  started = false;
+  nextDirection = null;
+}
+
+function draw() {
+  background(220);
+  if (!gameOver) {
+    if (started) {
+      snake.update();
+    }
+    snake.show();
+    if (snake.eat(food)) {
+      food = createFood();
+      score++;
+    }
+    fill(255, 0, 0);
+    rect(food.x * tileSize, food.y * tileSize, tileSize, tileSize);
+    fill(0);
+    textSize(20);
+    textAlign(LEFT, TOP);
+    text(`Score: ${score}`, 10, 30);
+    if (!started) {
+      textSize(24);
+      textAlign(CENTER, CENTER);
+      text('Press an arrow key to start', width / 2, height / 2);
+    }
+  } else {
+    fill(0);
+    textSize(32);
+    textAlign(CENTER, CENTER);
+    text('Game Over', width / 2, height / 2);
+    text(`Score: ${score}`, width / 2, height / 2 + 40);
+    textSize(24);
+    text('Press R to restart', width / 2, height / 2 + 80);
+  }
+}
+
+function keyPressed() {
+  if (gameOver) {
+    if (keyCode === 82) { // 'R' key
+      resetGame();
+    }
+    return;
+  }
+  // Only queue a new direction if it's valid
+  if (keyCode === UP_ARROW && snake.ydir !== 1) {
+    nextDirection = { x: 0, y: -1 };
+  } else if (keyCode === DOWN_ARROW && snake.ydir !== -1) {
+    nextDirection = { x: 0, y: 1 };
+  } else if (keyCode === LEFT_ARROW && snake.xdir !== 1) {
+    nextDirection = { x: -1, y: 0 };
+  } else if (keyCode === RIGHT_ARROW && snake.xdir !== -1) {
+    nextDirection = { x: 1, y: 0 };
+  }
+  // Start the game when a valid direction is set
+  if (nextDirection && !started) {
+    started = true;
+  }
+}
+
+class Snake {
+  constructor() {
+    this.body = [{ x: 10, y: 10 }];
+    this.xdir = 0;
+    this.ydir = 0;
+  }
+
+  update() {
+    if (this.xdir === 0 && this.ydir === 0 && !nextDirection) return;
+    
+    // Apply the next direction only at the start of the update cycle
+    if (nextDirection) {
+      this.xdir = nextDirection.x;
+      this.ydir = nextDirection.y;
+      nextDirection = null; // Clear the direction after applying
+    }
+    
+    if (this.xdir === 0 && this.ydir === 0) return;
+    
+    let head = { x: this.body[0].x + this.xdir, y: this.body[0].y + this.ydir };
+    
+    // Wall collision check
+    if (head.x < 0 || head.x >= width / tileSize || head.y < 0 || head.y >= height / tileSize) {
+      gameOver = true;
+      return;
+    }
+    
+    // Self collision check, excluding the head
+    for (let i = 1; i < this.body.length; i++) {
+      if (head.x === this.body[i].x && head.y === this.body[i].y) {
+        gameOver = true;
+        return;
+      }
+    }
+    
+    // Update body: add new head and remove tail
+    this.body.unshift(head);
+    this.body.pop();
+  }
+
+  show() {
+    fill(0, 255, 0);
+    for (let segment of this.body) {
+      rect(segment.x * tileSize, segment.y * tileSize, tileSize, tileSize);
+    }
+  }
+
+  setDir(x, y) {
+    this.xdir = x;
+    this.ydir = y;
+  }
+
+  eat(food) {
+    let head = this.body[0];
+    if (head.x === food.x && head.y === food.y) {
+      this.body.push({ ...this.body[this.body.length - 1] });
+      return true;
+    }
+    return false;
+  }
+}
+
+function createFood() {
+  let x = floor(random(width / tileSize));
+  let y = floor(random(height / tileSize));
+  for (let segment of snake.body) {
+    if (x === segment.x && y === segment.y) {
+      return createFood();
+    }
+  }
+  return { x, y };
+}
+</script>
+</body>
+</html>
