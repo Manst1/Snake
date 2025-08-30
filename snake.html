@@ -12,22 +12,36 @@
       margin: 0; 
       transition: background-color 0.3s, color 0.3s;
       font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      overflow: hidden;
     }
     canvas { 
       border: 2px solid; 
       transition: border-color 0.3s;
+      max-width: 100%;
+      max-height: 100%;
+      touch-action: none; /* Prevent default touch behaviors */
     }
     .theme-toggle {
       position: absolute;
       top: 20px;
       left: 20px;
-      padding: 8px 12px;
+      padding: 12px 16px; /* Larger padding for touch */
       border: none;
-      border-radius: 4px;
+      border-radius: 8px;
       cursor: pointer;
       font-weight: bold;
+      font-size: 16px; /* Larger font for readability */
       transition: background-color 0.3s, color 0.3s;
       box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+      z-index: 10;
+    }
+    @media (max-width: 600px) {
+      .theme-toggle {
+        top: 10px;
+        left: 10px;
+        padding: 10px 14px;
+        font-size: 14px;
+      }
     }
   </style>
 </head>
@@ -38,7 +52,7 @@
 let snake;
 let food;
 let gridSize = 20;
-let tileSize = 20;
+let tileSize;
 let gameOver = false;
 let score = 0;
 let started = false;
@@ -48,13 +62,20 @@ let moveInterval = 143;
 let isDarkMode = false;
 let isAprilFoolsMode = false;
 let currentTheme = {bg: null, snake: null, food: null, text: null, border: null};
+let touchStartX = 0;
+let touchStartY = 0;
+let touchThreshold = 30; // Minimum swipe distance in pixels
 
 function setup() {
-  createCanvas(400, 400);
+  // Responsive canvas size
+  let size = min(windowWidth * 0.9, windowHeight * 0.7, 400);
+  size = floor(size / gridSize) * gridSize; // Ensure size is multiple of gridSize
+  tileSize = size / gridSize;
+  createCanvas(size, size);
   
   // Check if today is April 1st
   const today = new Date();
-  isAprilFoolsMode = today.getMonth() === 3 && today.getDate() === 1; // April is month 3 (0-indexed)
+  isAprilFoolsMode = today.getMonth() === 3 && today.getDate() === 1;
   
   // Set initial theme based on time of day
   const hour = today.getHours();
@@ -62,6 +83,17 @@ function setup() {
   applyTheme();
   
   resetGame();
+
+  // Add touch event listeners
+  canvas.addEventListener('touchstart', handleTouchStart, { passive: false });
+  canvas.addEventListener('touchmove', handleTouchMove, { passive: false });
+}
+
+function windowResized() {
+  let size = min(windowWidth * 0.9, windowHeight * 0.7, 400);
+  size = floor(size / gridSize) * gridSize;
+  tileSize = size / gridSize;
+  resizeCanvas(size, size);
 }
 
 function resetGame() {
@@ -73,7 +105,6 @@ function resetGame() {
   nextDirection = null;
   lastUpdateTime = 0;
   
-  // Reset to default theme on restart
   if (!isAprilFoolsMode) {
     const hour = new Date().getHours();
     isDarkMode = hour >= 22 || hour < 4;
@@ -82,7 +113,6 @@ function resetGame() {
 }
 
 function draw() {
-  // Clear canvas with appropriate background
   if (isAprilFoolsMode && currentTheme.bg) {
     background(currentTheme.bg);
   } else if (isDarkMode) {
@@ -93,7 +123,6 @@ function draw() {
   
   if (!gameOver) {
     if (started) {
-      // Time-based movement instead of frame-based
       const currentTime = millis();
       if (currentTime - lastUpdateTime > moveInterval) {
         snake.update();
@@ -104,14 +133,11 @@ function draw() {
     if (snake.eat(food)) {
       food = createFood();
       score++;
-      
-      // If it's April Fool's mode, change to a random theme
       if (isAprilFoolsMode) {
         setRandomTheme();
       }
     }
     
-    // Draw food
     if (isAprilFoolsMode && currentTheme.food) {
       fill(currentTheme.food);
     } else if (isDarkMode) {
@@ -121,7 +147,6 @@ function draw() {
     }
     rect(food.x * tileSize, food.y * tileSize, tileSize, tileSize);
     
-    // Draw score
     if (isAprilFoolsMode && currentTheme.text) {
       fill(currentTheme.text);
     } else if (isDarkMode) {
@@ -129,12 +154,12 @@ function draw() {
     } else {
       fill(0);
     }
-    textSize(20);
+    textSize(min(20, tileSize));
     textAlign(LEFT, TOP);
-    text(`Score: ${score}`, 10, 30);
+    text(`Score: ${score}`, 10, 10);
     
     if (!started) {
-      textSize(24);
+      textSize(min(24, tileSize * 1.2));
       textAlign(CENTER, CENTER);
       if (isAprilFoolsMode && currentTheme.text) {
         fill(currentTheme.text);
@@ -143,10 +168,9 @@ function draw() {
       } else {
         fill(0);
       }
-      text('Press an arrow key to start', width / 2, height / 2);
+      text('Swipe or press an arrow key to start', width / 2, height / 2);
     }
   } else {
-    // Game over screen
     if (isAprilFoolsMode && currentTheme.text) {
       fill(currentTheme.text);
     } else if (isDarkMode) {
@@ -154,12 +178,12 @@ function draw() {
     } else {
       fill(0);
     }
-    textSize(32);
+    textSize(min(32, tileSize * 1.6));
     textAlign(CENTER, CENTER);
     text('Game Over', width / 2, height / 2);
-    text(`Score: ${score}`, width / 2, height / 2 + 40);
-    textSize(24);
-    text('Press R to restart', width / 2, height / 2 + 80);
+    text(`Score: ${score}`, width / 2, height / 2 + tileSize * 2);
+    textSize(min(24, tileSize * 1.2));
+    text('Tap or press R to restart', width / 2, height / 2 + tileSize * 4);
   }
 }
 
@@ -171,18 +195,57 @@ function keyPressed() {
     return;
   }
   
-  // Arrow keys and WASD controls
-  if ((keyCode === UP_ARROW || keyCode === 87) && snake.ydir !== 1) { // W or Up
+  if ((keyCode === UP_ARROW || keyCode === 87) && snake.ydir !== 1) {
     nextDirection = { x: 0, y: -1 };
-  } else if ((keyCode === DOWN_ARROW || keyCode === 83) && snake.ydir !== -1) { // S or Down
+  } else if ((keyCode === DOWN_ARROW || keyCode === 83) && snake.ydir !== -1) {
     nextDirection = { x: 0, y: 1 };
-  } else if ((keyCode === LEFT_ARROW || keyCode === 65) && snake.xdir !== 1) { // A or Left
+  } else if ((keyCode === LEFT_ARROW || keyCode === 65) && snake.xdir !== 1) {
     nextDirection = { x: -1, y: 0 };
-  } else if ((keyCode === RIGHT_ARROW || keyCode === 68) && snake.xdir !== -1) { // D or Right
+  } else if ((keyCode === RIGHT_ARROW || keyCode === 68) && snake.xdir !== -1) {
     nextDirection = { x: 1, y: 0 };
   }
   
-  // Start the game when a valid direction is set
+  if (nextDirection && !started) {
+    started = true;
+    lastUpdateTime = millis();
+  }
+}
+
+function handleTouchStart(event) {
+  event.preventDefault();
+  if (gameOver) {
+    resetGame();
+    return;
+  }
+  const touch = event.touches[0];
+  touchStartX = touch.clientX;
+  touchStartY = touch.clientY;
+}
+
+function handleTouchMove(event) {
+  event.preventDefault();
+  if (gameOver || !event.touches.length) return;
+  
+  const touch = event.touches[0];
+  const deltaX = touch.clientX - touchStartX;
+  const deltaY = touch.clientY - touchStartY;
+  
+  if (abs(deltaX) > abs(deltaY) && abs(deltaX) > touchThreshold) {
+    if (deltaX > 0 && snake.xdir !== -1) {
+      nextDirection = { x: 1, y: 0 }; // Right
+    } else if (deltaX < 0 && snake.xdir !== 1) {
+      nextDirection = { x: -1, y: 0 }; // Left
+    }
+    touchStartX = touch.clientX; // Reset to prevent repeated inputs
+  } else if (abs(deltaY) > touchThreshold) {
+    if (deltaY > 0 && snake.ydir !== -1) {
+      nextDirection = { x: 0, y: 1 }; // Down
+    } else if (deltaY < 0 && snake.ydir !== 1) {
+      nextDirection = { x: 0, y: -1 }; // Up
+    }
+    touchStartY = touch.clientY; // Reset to prevent repeated inputs
+  }
+  
   if (nextDirection && !started) {
     started = true;
     lastUpdateTime = millis();
@@ -199,24 +262,21 @@ class Snake {
   update() {
     if (this.xdir === 0 && this.ydir === 0 && !nextDirection) return;
     
-    // Apply the next direction only at the start of the update cycle
     if (nextDirection) {
       this.xdir = nextDirection.x;
       this.ydir = nextDirection.y;
-      nextDirection = null; // Clear the direction after applying
+      nextDirection = null;
     }
     
     if (this.xdir === 0 && this.ydir === 0) return;
     
     let head = { x: this.body[0].x + this.xdir, y: this.body[0].y + this.ydir };
     
-    // Wall collision check
     if (head.x < 0 || head.x >= width / tileSize || head.y < 0 || head.y >= height / tileSize) {
       gameOver = true;
       return;
     }
     
-    // Self collision check, excluding the head
     for (let i = 1; i < this.body.length; i++) {
       if (head.x === this.body[i].x && head.y === this.body[i].y) {
         gameOver = true;
@@ -224,7 +284,6 @@ class Snake {
       }
     }
     
-    // Update body: add new head and remove tail
     this.body.unshift(head);
     this.body.pop();
   }
@@ -282,7 +341,6 @@ function applyTheme() {
 }
 
 function setRandomTheme() {
-  // Generate random colors for the theme
   const hue = random(360);
   currentTheme = {
     bg: color(random(255), random(255), random(255)),
@@ -292,12 +350,10 @@ function setRandomTheme() {
     border: color(random(255), random(255), random(255))
   };
   
-  // Apply the theme to UI elements
   document.body.style.backgroundColor = `rgb(${red(currentTheme.bg)}, ${green(currentTheme.bg)}, ${blue(currentTheme.bg)})`;
   document.querySelector('canvas').style.borderColor = `rgb(${red(currentTheme.border)}, ${green(currentTheme.border)}, ${blue(currentTheme.border)})`;
   document.body.style.color = `rgb(${red(currentTheme.text)}, ${green(currentTheme.text)}, ${blue(currentTheme.text)})`;
   
-  // Set button and control colors with sufficient contrast
   const bgBrightness = (red(currentTheme.bg) + green(currentTheme.bg) + blue(currentTheme.bg)) / 3;
   const btnColor = bgBrightness > 128 ? '#000' : '#fff';
   const btnBg = bgBrightness > 128 ? 'rgba(255, 255, 255, 0.8)' : 'rgba(0, 0, 0, 0.7)';
@@ -306,13 +362,10 @@ function setRandomTheme() {
   document.getElementById('themeToggle').style.color = btnColor;
 }
 
-// Theme toggle functionality
 document.getElementById('themeToggle').addEventListener('click', function() {
   if (isAprilFoolsMode) {
-    // In April Fool's mode, just generate a new random theme
     setRandomTheme();
   } else {
-    // Normal mode behavior
     isDarkMode = !isDarkMode;
     applyTheme();
   }
